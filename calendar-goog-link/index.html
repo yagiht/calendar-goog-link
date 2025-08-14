@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life-Blueprint</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <h1 style="text-align: center; color: white; font-weight: bold;">Life-Blueprint</h1>
+    <div class="button-container">
+        <button id="addEventButton" class="game-button blue">
+            <span class="emblem">⚪</span> Add To-Do to Calendar
+        </button>
+        <a href="https://calendar.google.com" class="game-button red">
+            <span class="emblem">❌</span> Go to Google Calendar
+        </a>
+    </div>
+
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Add Event</h2>
+            <form id="eventForm">
+                <label for="eventTitle">Event Title:</label>
+                <input type="text" id="eventTitle" required>
+                
+                <label for="urgency">Urgency:</label>
+                <select id="urgency" required>
+                    <option value="normal">Normal</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="non-urgent">Non-urgent</option>
+                </select>
+                
+                <label for="eventDate">Date and Time:</label>
+                <input type="datetime-local" id="eventDate" required>
+                
+                <button type="submit">Create Event</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
