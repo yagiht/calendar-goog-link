@@ -8,7 +8,6 @@ function handleClientLoad() {
 // Initialize the gapi.client and set up sign-in state listeners
 function initClient() {
     gapi.client.init({
-        apiKey: 'YOUR_API_KEY_HERE', // Optional: Replace with your API key if needed
         clientId: CLIENT_ID,
         discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
         scope: "https://www.googleapis.com/auth/calendar.events"
