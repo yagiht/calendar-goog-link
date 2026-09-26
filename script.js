@@ -80,6 +80,8 @@ const DAY_CODES = {
     sat: 'SA', saturday: 'SA',
 };
 
+const DAY_NAME_RE = /\b(sunday|sun|monday|mon|tuesday|tues|tue|wednesday|weds|wed|thursday|thurs|thur|thu|friday|fri|saturday|sat)\b/gi;
+
 function extractRecurrence(text) {
     let cleaned = text;
     let recurrence = null;
@@ -94,36 +96,35 @@ function extractRecurrence(text) {
         }
     }
 
+    const hasTriggerWord = /\b(every|recurring)\b/i.test(cleaned);
+    const dayMatches = [...cleaned.matchAll(DAY_NAME_RE)];
+    const dayCodes = [...new Set(dayMatches.map((m) => DAY_CODES[m[0].toLowerCase()]))];
+
     if (/\b(every day|daily)\b/i.test(cleaned)) {
         recurrence = { freq: 'DAILY' };
         cleaned = cleaned.replace(/\b(every day|daily)\b/i, ' ');
-    } else {
-        const everyMatch = cleaned.match(/\bevery\s+([a-zA-Z\/,&\s]+)/i);
-        if (everyMatch) {
-            const rawTokens = everyMatch[1]
-                .split(/\s*[\/,&]\s*|\s+and\s+|\s+/i)
-                .map((s) => s.trim().toLowerCase())
-                .filter(Boolean);
-            const codes = [];
-            for (const t of rawTokens) {
-                const code = DAY_CODES[t];
-                if (!code) break; // stop at the first token that isn't a day name (e.g. a time)
-                codes.push(code);
-            }
-            if (codes.length) {
-                recurrence = { freq: 'WEEKLY', byday: [...new Set(codes)] };
-                cleaned = cleaned.replace(everyMatch[0], ' ');
-            }
-        } else if (/\bbiweekly\b/i.test(cleaned)) {
-            recurrence = { freq: 'WEEKLY', interval: 2 };
-            cleaned = cleaned.replace(/\bbiweekly\b/i, ' ');
-        } else if (/\bweekly\b/i.test(cleaned)) {
-            recurrence = { freq: 'WEEKLY' };
-            cleaned = cleaned.replace(/\bweekly\b/i, ' ');
-        } else if (/\brecurring\b/i.test(cleaned)) {
-            recurrence = { freq: 'WEEKLY' };
-            cleaned = cleaned.replace(/\brecurring\b/i, ' ');
-        }
+    } else if (dayCodes.length >= 2 || (dayCodes.length >= 1 && hasTriggerWord)) {
+        // Two-or-more distinct weekdays mentioned together ("Mon, Wed, Fri", "every
+        // Tuesday") reads as a recurring schedule even without the word "every" —
+        // that's just how people write a class/meeting schedule.
+        recurrence = { freq: 'WEEKLY', byday: dayCodes };
+        cleaned = cleaned
+            .replace(DAY_NAME_RE, ' ')
+            .replace(/\bevery\b/i, ' ')
+            .replace(/\bon\b/gi, ' ')
+            .replace(/,\s*and\b/gi, ' ')
+            .replace(/\band\b/gi, ' ')
+            .replace(/\//g, ' ')
+            .replace(/[,\s]{2,}/g, ' ');
+    } else if (/\bbiweekly\b/i.test(cleaned)) {
+        recurrence = { freq: 'WEEKLY', interval: 2 };
+        cleaned = cleaned.replace(/\bbiweekly\b/i, ' ');
+    } else if (/\bweekly\b/i.test(cleaned)) {
+        recurrence = { freq: 'WEEKLY' };
+        cleaned = cleaned.replace(/\bweekly\b/i, ' ');
+    } else if (/\brecurring\b/i.test(cleaned)) {
+        recurrence = { freq: 'WEEKLY' };
+        cleaned = cleaned.replace(/\brecurring\b/i, ' ');
     }
 
     if (recurrence && until) recurrence.until = until;
