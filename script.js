@@ -163,8 +163,13 @@ function recurrenceSummary(rrule) {
 
 // ---- Segment parsing ----------------------------------------------------
 function splitIntoSegments(text) {
+    // Only newlines/semicolons separate distinct events. Commas are left alone
+    // because they show up constantly inside a single event's own text ("every
+    // Mon, Wed, Fri", "until Dec 5, 2026") and splitting on them there does
+    // more harm than good. One event per line is the reliable way to enter
+    // multiple events; a comma-separated day list on one line stays intact.
     return text
-        .split(/\r?\n|;|,(?!\s*\d{4}\b)/)
+        .split(/\r?\n|;/)
         .map((s) => s.trim())
         .filter(Boolean);
 }
