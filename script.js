@@ -1,3 +1,8 @@
+// chrono-node stopped publishing a plain <script>-friendly global bundle;
+// it's CJS/ESM only now, so we pull it in as an ES module (this file is
+// loaded with type="module" in index.html, which is what allows this import).
+import * as chrono from 'https://esm.sh/chrono-node@2';
+
 // ---- Configuration ---------------------------------------------------
 const CLIENT_ID = '683774476384-iv9jqtjdtbl211o0rj4o2rlpms6v83t7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events';

@@ -12,9 +12,10 @@
     <script src="https://apis.google.com/js/api.js"></script>
     <!-- Google Identity Services handles OAuth sign-in -->
     <script src="https://accounts.google.com/gsi/client"></script>
-    <!-- chrono-node: client-side natural-language date/time parsing -->
-    <script src="https://cdn.jsdelivr.net/npm/chrono-node@2/dist/chrono.min.js"></script>
-    <script src="script.js" defer></script>
+    <!-- chrono-node no longer ships a plain browser global bundle (CJS/ESM only),
+         so script.js imports it directly as an ES module. type="module" is deferred
+         by default, so no separate `defer` attribute is needed. -->
+    <script src="script.js" type="module"></script>
 </head>
 <body>
     <div class="hud-frame">
