@@ -12,31 +12,48 @@ h1 {
     margin-top: 20px;
 }
 
-.button {
-    display: inline-block;
-    width: 45%;
-    padding: 20px;
-    margin: 20px;
+.button-container {
     text-align: center;
-    font-size: 24px;
-    font-weight: bold;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: transform 0.2s;
+    margin: 20px auto;
 }
 
-.button:hover {
+.game-button {
+    display: inline-block;
+    width: 40%;
+    max-width: 260px;
+    padding: 20px;
+    margin: 10px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    color: white;
+    transition: transform 0.2s, opacity 0.2s;
+    text-decoration: none;
+}
+
+.game-button:hover {
     transform: scale(1.05);
 }
 
-.button-left {
-    background-color: blue;
-    color: white;
+.game-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
 }
 
-.button-right {
-    background-color: red;
-    color: white;
+.game-button.blue {
+    background-color: #2563eb;
+}
+
+.game-button.red {
+    background-color: #dc2626;
+}
+
+.emblem {
+    margin-right: 8px;
 }
 
 .modal {
@@ -53,22 +70,37 @@ h1 {
 
 .modal-content {
     background-color: #fefefe;
+    color: #222;
     margin: 15% auto;
     padding: 20px;
     border: 1px solid #888;
     width: 80%;
+    max-width: 400px;
+    border-radius: 8px;
 }
 
-.close {
+.modal-content label {
+    display: block;
+    margin-top: 10px;
+}
+
+.modal-content input,
+.modal-content select {
+    width: 100%;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.close-button {
     color: #aaa;
     float: right;
     font-size: 28px;
     font-weight: bold;
+    cursor: pointer;
 }
 
-.close:hover,
-.close:focus {
+.close-button:hover,
+.close-button:focus {
     color: black;
     text-decoration: none;
-    cursor: pointer;
 }

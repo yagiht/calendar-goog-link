@@ -1,86 +1,141 @@
-const CLIENT_ID = '683774476384-iv9jqtjdtbl211o0rj4o2rlpms6v83t7.apps.googleusercontent.com'; // Replace with your Google Cloud OAuth Client ID
+// ---- Configuration ---------------------------------------------------
+// Create an OAuth 2.0 Client ID in Google Cloud Console (Web application)
+// and put it here. See README.md for the full setup walkthrough.
+const CLIENT_ID = '683774476384-iv9jqtjdtbl211o0rj4o2rlpms6v83t7.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
-// Load the API client and auth2 library
-function handleClientLoad() {
-    gapi.load('client:auth2', initClient);
+// gapi.client is used only to call the Calendar API. Auth itself is handled
+// by Google Identity Services (tokenClient below) — gapi.auth2 is deprecated
+// and no longer reliably initializes for OAuth client IDs, which is why the
+// old sign-in flow silently failed.
+let gapiInited = false;
+let gisInited = false;
+let tokenClient;
+
+function gapiLoaded() {
+    gapi.load('client', initGapiClient);
 }
 
-// Initialize the gapi.client and set up sign-in state listeners
-function initClient() {
-    gapi.client.init({
-        apiKey: 'YOUR_API_KEY_HERE', // Optional: Replace with your API key if needed
-        clientId: CLIENT_ID,
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-        scope: "https://www.googleapis.com/auth/calendar.events"
-    }).then(() => {
-        // Listen for sign-in state changes
-        gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
-        // Handle the initial sign-in state
-        updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+async function initGapiClient() {
+    await gapi.client.init({
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
     });
+    gapiInited = true;
+    maybeEnableButtons();
 }
 
-// Update the UI based on the sign-in status
-function updateSigninStatus(isSignedIn) {
-    if (isSignedIn) {
-        document.getElementById('sign-in-button').style.display = 'none';
-        document.getElementById('sign-out-button').style.display = 'block';
-    } else {
-        document.getElementById('sign-in-button').style.display = 'block';
-        document.getElementById('sign-out-button').style.display = 'none';
+function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: '', // set dynamically before each requestAccessToken() call
+    });
+    gisInited = true;
+    maybeEnableButtons();
+}
+
+function maybeEnableButtons() {
+    if (gapiInited && gisInited) {
+        document.getElementById('sign-in-button').style.display = 'inline-block';
     }
 }
 
-// Sign in the user upon button click
+// ---- Sign in / sign out ------------------------------------------------
 function handleSignInClick() {
-    gapi.auth2.getAuthInstance().signIn();
+    tokenClient.callback = (resp) => {
+        if (resp.error) {
+            console.error(resp);
+            alert('Sign-in failed: ' + resp.error);
+            return;
+        }
+        updateSigninStatus(true);
+    };
+    tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
-// Sign out the user upon button click
 function handleSignOutClick() {
-    gapi.auth2.getAuthInstance().signOut();
+    const token = gapi.client.getToken();
+    if (token !== null) {
+        google.accounts.oauth2.revoke(token.access_token, () => {});
+        gapi.client.setToken('');
+    }
+    updateSigninStatus(false);
 }
 
-// Function to open the modal for event details
+function updateSigninStatus(isSignedIn) {
+    document.getElementById('sign-in-button').style.display = isSignedIn ? 'none' : 'inline-block';
+    document.getElementById('sign-out-button').style.display = isSignedIn ? 'inline-block' : 'none';
+    document.getElementById('addEventButton').disabled = !isSignedIn;
+}
+
+// ---- Modal --------------------------------------------------------------
 function openModal() {
-    document.getElementById('event-modal').style.display = 'block';
+    document.getElementById('eventModal').style.display = 'block';
 }
 
-// Function to close the modal
 function closeModal() {
-    document.getElementById('event-modal').style.display = 'none';
+    document.getElementById('eventModal').style.display = 'none';
 }
 
-// Function to create an event in the user's Google Calendar
+// ---- Create event ---------------------------------------------------
 function createEvent() {
-    const title = document.getElementById('event-title').value;
-    const urgency = document.getElementById('urgency-dropdown').value;
-    const startTime = document.getElementById('event-start-time').value;
-    const endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // 1 hour later
+    const title = document.getElementById('eventTitle').value;
+    const urgency = document.getElementById('urgency').value;
+    const startTime = document.getElementById('eventDate').value;
+
+    if (!startTime) {
+        alert('Please select a date and time.');
+        return;
+    }
+
+    const startISO = new Date(startTime).toISOString();
+    const endISO = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // 1 hour later
 
     const event = {
-        'summary': `${title} (${urgency})`,
-        'start': {
-            'dateTime': startTime,
-            'timeZone': 'America/Los_Angeles' // Adjust as necessary
+        summary: `${title} (${urgency})`,
+        start: {
+            dateTime: startISO,
+            timeZone: 'America/Los_Angeles',
         },
-        'end': {
-            'dateTime': endTime,
-            'timeZone': 'America/Los_Angeles' // Adjust as necessary
+        end: {
+            dateTime: endISO,
+            timeZone: 'America/Los_Angeles',
         },
-        'description': ''
+        description: '',
     };
 
     gapi.client.calendar.events.insert({
-        'calendarId': 'primary',
-        'resource': event
+        calendarId: 'primary',
+        resource: event,
     }).then((response) => {
-        console.log('Event created: ' + response.htmlLink);
+        console.log('Event created: ' + response.result.htmlLink);
         closeModal();
+        document.getElementById('eventForm').reset();
+    }).catch((err) => {
+        console.error('Failed to create event', err);
+        alert('Failed to create event. Check the console for details.');
     });
 }
 
-// Load the API client and auth2 library when the window loads
-window.onload = function() {
-    handleClientLoad();
+// ---- Wire everything up on load --------------------------------------
+window.onload = function () {
+    gapiLoaded();
+    gisLoaded();
+
+    document.getElementById('sign-in-button').onclick = handleSignInClick;
+    document.getElementById('sign-out-button').onclick = handleSignOutClick;
+    document.getElementById('addEventButton').onclick = openModal;
+    document.querySelector('.close-button').onclick = closeModal;
+
+    window.onclick = function (event) {
+        const modal = document.getElementById('eventModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    };
+
+    document.getElementById('eventForm').onsubmit = function (e) {
+        e.preventDefault();
+        createEvent();
+    };
 };

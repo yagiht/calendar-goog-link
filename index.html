@@ -5,16 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Life-Blueprint</title>
     <link rel="stylesheet" href="style.css">
+    <!-- gapi.client is still used to call the Calendar API -->
     <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Google Identity Services replaces the deprecated gapi.auth2 for sign-in -->
+    <script src="https://accounts.google.com/gsi/client"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
     <h1 style="text-align: center; color: white; font-weight: bold;">Life-Blueprint</h1>
+
     <div class="button-container">
-        <button id="addEventButton" class="game-button blue">
+        <button id="sign-in-button" class="game-button blue">
+            <span class="emblem">🔑</span> Sign in with Google
+        </button>
+        <button id="sign-out-button" class="game-button red" style="display: none;">
+            <span class="emblem">🚪</span> Sign out
+        </button>
+    </div>
+
+    <div class="button-container">
+        <button id="addEventButton" class="game-button blue" disabled>
             <span class="emblem">⚪</span> Add To-Do to Calendar
         </button>
-        <a href="https://calendar.google.com" class="game-button red">
+        <a href="https://calendar.google.com" target="_blank" class="game-button red">
             <span class="emblem">❌</span> Go to Google Calendar
         </a>
     </div>
@@ -26,17 +39,20 @@
             <form id="eventForm">
                 <label for="eventTitle">Event Title:</label>
                 <input type="text" id="eventTitle" required>
-                
+                <br><br>
+
                 <label for="urgency">Urgency:</label>
                 <select id="urgency" required>
-                    <option value="normal">Normal</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="non-urgent">Non-urgent</option>
+                    <option value="URGENT">(URGENT)</option>
+                    <option value="Normal" selected>(Normal)</option>
+                    <option value="non-urgent">(non-urgent)</option>
                 </select>
-                
+                <br><br>
+
                 <label for="eventDate">Date and Time:</label>
                 <input type="datetime-local" id="eventDate" required>
-                
+                <br><br>
+
                 <button type="submit">Create Event</button>
             </form>
         </div>
