@@ -3,59 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life-Blueprint</title>
-    <link rel="stylesheet" href="style.css">
-    <!-- gapi.client is still used to call the Calendar API -->
+    <title>Echo Calendar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=4">
+    <!-- gapi.client is used only to call the Calendar API -->
     <script src="https://apis.google.com/js/api.js"></script>
-    <!-- Google Identity Services replaces the deprecated gapi.auth2 for sign-in -->
+    <!-- Google Identity Services handles OAuth sign-in -->
     <script src="https://accounts.google.com/gsi/client"></script>
-    <script src="script.js" defer></script>
+    <!-- chrono-node no longer ships a plain browser global bundle (CJS/ESM only),
+         so script.js imports it directly as an ES module. type="module" is deferred
+         by default, so no separate `defer` attribute is needed. -->
+    <script src="script.js?v=4" type="module"></script>
 </head>
 <body>
-    <h1 style="text-align: center; color: white; font-weight: bold;">Life-Blueprint</h1>
-
-    <div class="button-container">
-        <button id="sign-in-button" class="game-button blue">
-            <span class="emblem">🔑</span> Sign in with Google
-        </button>
-        <button id="sign-out-button" class="game-button red" style="display: none;">
-            <span class="emblem">🚪</span> Sign out
-        </button>
+    <div class="hud-frame">
+        <div class="hud-corner tl"></div>
+        <div class="hud-corner tr"></div>
+        <div class="hud-corner bl"></div>
+        <div class="hud-corner br"></div>
     </div>
 
-    <div class="button-container">
-        <button id="addEventButton" class="game-button blue" disabled>
-            <span class="emblem">⚪</span> Add To-Do to Calendar
-        </button>
-        <a href="https://calendar.google.com" target="_blank" class="game-button red">
-            <span class="emblem">❌</span> Go to Google Calendar
-        </a>
-    </div>
+    <div class="app">
+        <header>
+            <h1 id="appTitle">ECHO Calendar</h1>
+            <p class="tagline">Chunk it in. It lands on your calendar.</p>
+        </header>
 
-    <div id="eventModal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2>Add Event</h2>
-            <form id="eventForm">
-                <label for="eventTitle">Event Title:</label>
-                <input type="text" id="eventTitle" required>
-                <br><br>
-
-                <label for="urgency">Urgency:</label>
-                <select id="urgency" required>
-                    <option value="URGENT">(URGENT)</option>
-                    <option value="Normal" selected>(Normal)</option>
-                    <option value="non-urgent">(non-urgent)</option>
-                </select>
-                <br><br>
-
-                <label for="eventDate">Date and Time:</label>
-                <input type="datetime-local" id="eventDate" required>
-                <br><br>
-
-                <button type="submit">Create Event</button>
-            </form>
+        <div id="authGate" class="auth-gate panel">
+            <button id="sign-in-button" class="btn btn-primary" style="display: none;">Sign in with Google</button>
+            <p id="authLoading" class="muted">Loading…</p>
         </div>
+
+        <main id="plannerView" class="planner" hidden>
+            <div class="input-card panel">
+                <textarea id="chunkInput" rows="5" placeholder="One entry per line works best:&#10;CS31 hw due Friday 11pm&#10;Discussion every Mon/Wed 2pm until Dec 5&#10;Team meeting tomorrow 4pm"></textarea>
+                <div class="input-actions">
+                    <button id="micButton" class="btn btn-ghost btn-icon" title="Dictate" hidden>
+                        <span class="mic-dot"></span>Speak
+                    </button>
+                    <button id="parseButton" class="btn btn-primary">Parse</button>
+                    <button id="clearButton" class="btn btn-ghost">Clear</button>
+                </div>
+            </div>
+
+            <div id="draftList" class="draft-list"></div>
+
+            <div id="draftActions" class="draft-actions" hidden>
+                <button id="addAllButton" class="btn btn-primary btn-wide">Add to Calendar</button>
+            </div>
+
+            <footer class="app-footer">
+                <a href="https://calendar.google.com" target="_blank" class="link">Open Google Calendar</a>
+                <button id="sign-out-button" class="link-button">Sign out</button>
+            </footer>
+        </main>
     </div>
+
+    <div id="toast" class="toast" hidden></div>
 </body>
 </html>
