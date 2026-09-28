@@ -173,7 +173,14 @@ function getUntilFromRRule(rrule) {
 
 function setUntilOnRRule(rrule, date) {
     if (!rrule) return rrule;
-    const base = rrule.replace(/;?UNTIL=\d{8}T\d{6}Z/, '');
+    // Global flag matters here: a native date input can fire multiple
+    // 'change' events while it's being filled in (e.g. typing a year digit
+    // by digit briefly produces other complete-looking dates), and each one
+    // calls this function. Without /g, only the first old UNTIL got
+    // stripped, so repeated edits piled up extra UNTIL clauses into one
+    // malformed RRULE string that Google's Calendar API then rejected
+    // outright with a 400.
+    const base = rrule.replace(/;?UNTIL=\d{8}T\d{6}Z/g, '');
     if (!date) return base;
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
