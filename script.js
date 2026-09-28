@@ -173,16 +173,24 @@ function getUntilFromRRule(rrule) {
 
 function setUntilOnRRule(rrule, date) {
     if (!rrule) return rrule;
-    // Global flag matters here: a native date input can fire multiple
-    // 'change' events while it's being filled in (e.g. typing a year digit
-    // by digit briefly produces other complete-looking dates), and each one
-    // calls this function. Without /g, only the first old UNTIL got
-    // stripped, so repeated edits piled up extra UNTIL clauses into one
-    // malformed RRULE string that Google's Calendar API then rejected
-    // outright with a 400.
-    const base = rrule.replace(/;?UNTIL=\d{8}T\d{6}Z/g, '');
+    // Loose and global on purpose: a native date input can fire 'change'
+    // with a partial value while it's being typed (e.g. a 1-, 2-, or
+    // 3-digit year briefly forms a "complete" date before the 4th digit
+    // lands), and each firing calls this function. An earlier version only
+    // matched well-formed 8-digit dates and only removed the first match,
+    // so a short/malformed UNTIL from a partial year couldn't be cleaned
+    // up and instead piled up alongside every later attempt — producing a
+    // corrupted RRULE with multiple UNTIL clauses that Google's Calendar
+    // API rejected with a 400. Matching anything after "UNTIL=" up to the
+    // next ';' (or the end), globally, guarantees every prior clause is
+    // gone before we add the new one, however it was shaped.
+    const base = rrule.replace(/;?UNTIL=[^;]*/g, '');
     if (!date) return base;
-    const y = date.getFullYear();
+    // Zero-pad the year defensively too — getFullYear() isn't padded by
+    // default, so an incomplete/odd date would otherwise produce a
+    // too-short UNTIL that the regex above can still catch next time, but
+    // there's no reason to emit a malformed one in the first place.
+    const y = String(date.getFullYear()).padStart(4, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${base};UNTIL=${y}${m}${d}T235959Z`;
@@ -324,6 +332,12 @@ function renderDrafts() {
             card.querySelector('.draft-until-row').hidden = !draft.repeats;
         };
         card.querySelector('.draft-until').onchange = (e) => {
+            // A native date input's own value should always be either empty
+            // or a full "YYYY-MM-DD", but this guard is cheap insurance
+            // against acting on a partial value if a browser ever fires
+            // change mid-entry — better to just ignore that event than feed
+            // a bad date into the RRULE.
+            if (e.target.value && !/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) return;
             const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : null;
             draft.rrule = setUntilOnRRule(draft.rrule, date);
             card.querySelector('.draft-repeat-summary').textContent = recurrenceSummary(draft.rrule);
