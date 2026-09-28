@@ -184,6 +184,17 @@ textarea#chunkInput::placeholder {
     margin-top: 10px;
 }
 
+.voice-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+}
+
+.voice-hint[hidden] {
+    display: none;
+}
+
 .btn {
     border: 1px solid transparent;
     border-radius: 2px;

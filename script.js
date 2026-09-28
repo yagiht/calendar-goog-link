@@ -381,13 +381,15 @@ async function addAllDrafts() {
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizer = null;
 let listening = false;
-let baseTextBeforeListening = '';
+let baseTextBeforeListening = ''; // textarea contents from before this listening session started
+let sessionFinalText = ''; // finalized speech accumulated *within* the current session
 
 function setupVoiceInput() {
     const micButton = document.getElementById('micButton');
     if (!SpeechRecognitionImpl) return; // stays hidden
 
     micButton.hidden = false;
+    document.getElementById('voiceHint').hidden = false;
 
     recognizer = new SpeechRecognitionImpl();
     recognizer.continuous = true;
@@ -409,13 +411,17 @@ function setupVoiceInput() {
         }
 
         if (finalText) {
-            // Commit finalized speech onto the running base, one line per
-            // recognized phrase — that matches how the parser expects
-            // entries to be separated.
-            baseTextBeforeListening = joinLines(baseTextBeforeListening, finalText.trim());
+            // The recognizer finalizes a chunk at every pause it detects,
+            // which happens mid-sentence constantly — that's not the same
+            // as the speaker starting a new entry. So finalized chunks
+            // within one listening session join onto the same line with a
+            // space; a new line only starts the next time the mic button
+            // is clicked to begin a fresh session.
+            sessionFinalText = (sessionFinalText + ' ' + finalText.trim()).trim();
         }
 
-        chunkInput.value = joinLines(baseTextBeforeListening, interimText.trim());
+        const currentLine = (sessionFinalText + ' ' + interimText.trim()).trim();
+        chunkInput.value = joinLines(baseTextBeforeListening, currentLine);
     };
 
     recognizer.onerror = (event) => {
@@ -442,6 +448,7 @@ function setupVoiceInput() {
             micButton.classList.remove('listening');
         } else {
             baseTextBeforeListening = document.getElementById('chunkInput').value;
+            sessionFinalText = '';
             try {
                 recognizer.start();
                 listening = true;
