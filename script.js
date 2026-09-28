@@ -1,19 +1,17 @@
-// chrono-node stopped publishing a plain <script>-friendly global bundle;
-// it's CJS/ESM only now, so we pull it in as an ES module (this file is
-// loaded with type="module" in index.html, which is what allows this import).
-import * as chrono from 'https://esm.sh/chrono-node@2';
-
 // ---- Configuration ---------------------------------------------------
+// Create an OAuth 2.0 Client ID in Google Cloud Console (Web application)
+// and put it here. See README.md for the full setup walkthrough.
 const CLIENT_ID = '683774476384-iv9jqtjdtbl211o0rj4o2rlpms6v83t7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-const TIMEZONE = 'America/Los_Angeles';
 
+// gapi.client is used only to call the Calendar API. Auth itself is handled
+// by Google Identity Services (tokenClient below) — gapi.auth2 is deprecated
+// and no longer reliably initializes for OAuth client IDs, which is why the
+// old sign-in flow silently failed.
 let gapiInited = false;
 let gisInited = false;
 let tokenClient;
-let drafts = []; // { id, title, start: Date, end: Date, rrule: string|null, needsReview: bool }
 
-// ---- Auth (Google Identity Services + gapi.client) ----------------------
 function gapiLoaded() {
     gapi.load('client', initGapiClient);
 }
@@ -23,34 +21,34 @@ async function initGapiClient() {
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
     });
     gapiInited = true;
-    maybeReady();
+    maybeEnableButtons();
 }
 
 function gisLoaded() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: '',
+        callback: '', // set dynamically before each requestAccessToken() call
     });
     gisInited = true;
-    maybeReady();
+    maybeEnableButtons();
 }
 
-function maybeReady() {
+function maybeEnableButtons() {
     if (gapiInited && gisInited) {
-        document.getElementById('authLoading').style.display = 'none';
         document.getElementById('sign-in-button').style.display = 'inline-block';
     }
 }
 
+// ---- Sign in / sign out ------------------------------------------------
 function handleSignInClick() {
     tokenClient.callback = (resp) => {
         if (resp.error) {
             console.error(resp);
-            showToast('Sign-in failed: ' + resp.error, true);
+            alert('Sign-in failed: ' + resp.error);
             return;
         }
-        setSignedIn(true);
+        updateSigninStatus(true);
     };
     tokenClient.requestAccessToken({ prompt: 'consent' });
 }
@@ -61,315 +59,83 @@ function handleSignOutClick() {
         google.accounts.oauth2.revoke(token.access_token, () => {});
         gapi.client.setToken('');
     }
-    setSignedIn(false);
+    updateSigninStatus(false);
 }
 
-function setSignedIn(isSignedIn) {
-    document.getElementById('authGate').hidden = isSignedIn;
-    document.getElementById('plannerView').hidden = !isSignedIn;
+function updateSigninStatus(isSignedIn) {
+    document.getElementById('sign-in-button').style.display = isSignedIn ? 'none' : 'inline-block';
+    document.getElementById('sign-out-button').style.display = isSignedIn ? 'inline-block' : 'none';
+    document.getElementById('addEventButton').disabled = !isSignedIn;
 }
 
-// ---- Recurrence parsing ---------------------------------------------
-const DAY_CODES = {
-    sun: 'SU', sunday: 'SU',
-    mon: 'MO', monday: 'MO',
-    tue: 'TU', tues: 'TU', tuesday: 'TU',
-    wed: 'WE', weds: 'WE', wednesday: 'WE',
-    thu: 'TH', thur: 'TH', thurs: 'TH', thursday: 'TH',
-    fri: 'FR', friday: 'FR',
-    sat: 'SA', saturday: 'SA',
-};
-
-const DAY_NAME_RE = /\b(sunday|sun|monday|mon|tuesday|tues|tue|wednesday|weds|wed|thursday|thurs|thur|thu|friday|fri|saturday|sat)\b/gi;
-
-function extractRecurrence(text) {
-    let cleaned = text;
-    let recurrence = null;
-    let until = null;
-
-    const untilMatch = cleaned.match(/\buntil\s+([a-zA-Z0-9,\/\-\s]+?)(?=$|[,;.])/i);
-    if (untilMatch) {
-        const parsed = chrono.parseDate(untilMatch[1]);
-        if (parsed) {
-            until = parsed;
-            cleaned = cleaned.replace(untilMatch[0], ' ');
-        }
-    }
-
-    const hasTriggerWord = /\b(every|recurring)\b/i.test(cleaned);
-    const dayMatches = [...cleaned.matchAll(DAY_NAME_RE)];
-    const dayCodes = [...new Set(dayMatches.map((m) => DAY_CODES[m[0].toLowerCase()]))];
-
-    if (/\b(every day|daily)\b/i.test(cleaned)) {
-        recurrence = { freq: 'DAILY' };
-        cleaned = cleaned.replace(/\b(every day|daily)\b/i, ' ');
-    } else if (dayCodes.length >= 2 || (dayCodes.length >= 1 && hasTriggerWord)) {
-        // Two-or-more distinct weekdays mentioned together ("Mon, Wed, Fri", "every
-        // Tuesday") reads as a recurring schedule even without the word "every" —
-        // that's just how people write a class/meeting schedule.
-        recurrence = { freq: 'WEEKLY', byday: dayCodes };
-        cleaned = cleaned
-            .replace(DAY_NAME_RE, ' ')
-            .replace(/\bevery\b/i, ' ')
-            .replace(/\bon\b/gi, ' ')
-            .replace(/,\s*and\b/gi, ' ')
-            .replace(/\band\b/gi, ' ')
-            .replace(/\//g, ' ')
-            .replace(/[,\s]{2,}/g, ' ');
-    } else if (/\bbiweekly\b/i.test(cleaned)) {
-        recurrence = { freq: 'WEEKLY', interval: 2 };
-        cleaned = cleaned.replace(/\bbiweekly\b/i, ' ');
-    } else if (/\bweekly\b/i.test(cleaned)) {
-        recurrence = { freq: 'WEEKLY' };
-        cleaned = cleaned.replace(/\bweekly\b/i, ' ');
-    } else if (/\brecurring\b/i.test(cleaned)) {
-        recurrence = { freq: 'WEEKLY' };
-        cleaned = cleaned.replace(/\brecurring\b/i, ' ');
-    }
-
-    if (recurrence && until) recurrence.until = until;
-    return { recurrence, cleaned };
+// ---- Modal --------------------------------------------------------------
+function openModal() {
+    document.getElementById('eventModal').style.display = 'block';
 }
 
-function toRRule(rec) {
-    if (!rec) return null;
-    const parts = [`FREQ=${rec.freq}`];
-    if (rec.interval) parts.push(`INTERVAL=${rec.interval}`);
-    if (rec.byday && rec.byday.length) parts.push(`BYDAY=${rec.byday.join(',')}`);
-    if (rec.until) {
-        const u = rec.until;
-        const y = u.getFullYear();
-        const m = String(u.getMonth() + 1).padStart(2, '0');
-        const d = String(u.getDate()).padStart(2, '0');
-        parts.push(`UNTIL=${y}${m}${d}T235959Z`);
-    }
-    return `RRULE:${parts.join(';')}`;
+function closeModal() {
+    document.getElementById('eventModal').style.display = 'none';
 }
 
-function recurrenceSummary(rrule) {
-    if (!rrule) return 'Does not repeat';
-    const freqMatch = rrule.match(/FREQ=(\w+)/);
-    const bydayMatch = rrule.match(/BYDAY=([\w,]+)/);
-    const untilMatch = rrule.match(/UNTIL=(\d{8})/);
-    let summary = freqMatch[1] === 'DAILY' ? 'Daily' : 'Weekly';
-    if (bydayMatch) {
-        summary += ' on ' + bydayMatch[1].split(',').join(', ');
-    }
-    if (untilMatch) {
-        const s = untilMatch[1];
-        summary += ` until ${s.slice(4, 6)}/${s.slice(6, 8)}/${s.slice(0, 4)}`;
-    }
-    return summary;
-}
+// ---- Create event ---------------------------------------------------
+function createEvent() {
+    const title = document.getElementById('eventTitle').value;
+    const urgency = document.getElementById('urgency').value;
+    const startTime = document.getElementById('eventDate').value;
 
-// ---- Segment parsing ----------------------------------------------------
-function splitIntoSegments(text) {
-    // Only newlines/semicolons separate distinct events. Commas are left alone
-    // because they show up constantly inside a single event's own text ("every
-    // Mon, Wed, Fri", "until Dec 5, 2026") and splitting on them there does
-    // more harm than good. One event per line is the reliable way to enter
-    // multiple events; a comma-separated day list on one line stays intact.
-    return text
-        .split(/\r?\n|;/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-}
-
-function parseSegment(raw) {
-    const { recurrence, cleaned } = extractRecurrence(raw);
-    const results = chrono.parse(cleaned, new Date(), { forwardDate: true });
-
-    let start = null;
-    let end = null;
-    let title = cleaned;
-    let needsReview = false;
-
-    if (results.length) {
-        const r = results[0];
-        start = r.start.date();
-        end = r.end ? r.end.date() : null;
-        title = cleaned.slice(0, r.index) + cleaned.slice(r.index + r.text.length);
-
-        const hasTime = r.start.isCertain('hour');
-        if (!end) {
-            if (hasTime) {
-                end = new Date(start.getTime() + 60 * 60 * 1000);
-            } else {
-                start.setHours(23, 59, 0, 0);
-                end = new Date(start.getTime() + 30 * 60 * 1000);
-            }
-        }
-    } else {
-        needsReview = true;
-        start = new Date();
-        start.setDate(start.getDate() + 1);
-        start.setHours(9, 0, 0, 0);
-        end = new Date(start.getTime() + 60 * 60 * 1000);
-    }
-
-    title = title.replace(/^[\s,.\-–:]+|[\s,.\-–:]+$/g, '').trim();
-    if (!title) title = raw.trim();
-
-    return {
-        id: crypto.randomUUID(),
-        title,
-        start,
-        end,
-        rrule: toRRule(recurrence),
-        needsReview,
-        raw,
-    };
-}
-
-// ---- Draft rendering -----------------------------------------------
-function toLocalInputValue(date) {
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function renderDrafts() {
-    const list = document.getElementById('draftList');
-    const actions = document.getElementById('draftActions');
-    list.innerHTML = '';
-
-    if (!drafts.length) {
-        actions.hidden = true;
+    if (!startTime) {
+        alert('Please select a date and time.');
         return;
     }
-    actions.hidden = false;
 
-    drafts.forEach((draft) => {
-        const card = document.createElement('div');
-        card.className = 'draft-card' + (draft.needsReview ? ' needs-review' : '');
-        card.dataset.id = draft.id;
+    const startISO = new Date(startTime).toISOString();
+    const endISO = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // 1 hour later
 
-        card.innerHTML = `
-            <button class="draft-remove" title="Remove">&times;</button>
-            <input type="text" class="draft-title" value="${escapeHtml(draft.title)}">
-            <div class="draft-row">
-                <label>Start
-                    <input type="datetime-local" class="draft-start" value="${toLocalInputValue(draft.start)}">
-                </label>
-                <label>End
-                    <input type="datetime-local" class="draft-end" value="${toLocalInputValue(draft.end)}">
-                </label>
-            </div>
-            <div class="draft-meta">
-                <label class="draft-recurrence">
-                    <input type="checkbox" class="draft-repeat-toggle" ${draft.rrule ? 'checked' : ''}>
-                    <span class="draft-repeat-summary">${recurrenceSummary(draft.rrule)}</span>
-                </label>
-            </div>
-            ${draft.needsReview ? '<div class="draft-review-note">Couldn’t detect a date/time — defaulted to tomorrow 9am. Please check.</div>' : ''}
-        `;
+    const event = {
+        summary: `${title} (${urgency})`,
+        start: {
+            dateTime: startISO,
+            timeZone: 'America/Los_Angeles',
+        },
+        end: {
+            dateTime: endISO,
+            timeZone: 'America/Los_Angeles',
+        },
+        description: '',
+    };
 
-        card.querySelector('.draft-remove').onclick = () => {
-            drafts = drafts.filter((d) => d.id !== draft.id);
-            renderDrafts();
-        };
-        card.querySelector('.draft-title').oninput = (e) => {
-            draft.title = e.target.value;
-        };
-        card.querySelector('.draft-start').onchange = (e) => {
-            draft.start = new Date(e.target.value);
-        };
-        card.querySelector('.draft-end').onchange = (e) => {
-            draft.end = new Date(e.target.value);
-        };
-        card.querySelector('.draft-repeat-toggle').onchange = (e) => {
-            if (!e.target.checked) draft.rrule = null;
-            card.querySelector('.draft-repeat-summary').textContent = recurrenceSummary(draft.rrule);
-        };
-
-        list.appendChild(card);
+    gapi.client.calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+    }).then((response) => {
+        console.log('Event created: ' + response.result.htmlLink);
+        closeModal();
+        document.getElementById('eventForm').reset();
+    }).catch((err) => {
+        console.error('Failed to create event', err);
+        alert('Failed to create event. Check the console for details.');
     });
 }
 
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-// ---- Calendar insert -----------------------------------------------
-async function addAllDrafts() {
-    if (!drafts.length) return;
-    const button = document.getElementById('addAllButton');
-    button.disabled = true;
-    button.textContent = 'Adding…';
-
-    let successCount = 0;
-    const failures = [];
-
-    for (const draft of drafts) {
-        const event = {
-            summary: draft.title,
-            start: { dateTime: draft.start.toISOString(), timeZone: TIMEZONE },
-            end: { dateTime: draft.end.toISOString(), timeZone: TIMEZONE },
-        };
-        if (draft.rrule) event.recurrence = [draft.rrule];
-
-        try {
-            await gapi.client.calendar.events.insert({ calendarId: 'primary', resource: event });
-            successCount += 1;
-        } catch (err) {
-            console.error('Failed to create event', draft, err);
-            failures.push(draft.title);
-        }
-    }
-
-    button.disabled = false;
-    button.textContent = 'Add to Calendar';
-
-    if (failures.length === 0) {
-        showToast(`Added ${successCount} event${successCount === 1 ? '' : 's'} to your calendar.`);
-        drafts = [];
-        renderDrafts();
-        document.getElementById('chunkInput').value = '';
-    } else {
-        showToast(`Added ${successCount}, failed: ${failures.join(', ')}`, true);
-        drafts = drafts.filter((d) => failures.includes(d.title));
-        renderDrafts();
-    }
-}
-
-// ---- Toast ------------------------------------------------------------
-let toastTimer;
-function showToast(message, isError = false) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = 'toast' + (isError ? ' error' : '');
-    toast.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-        toast.hidden = true;
-    }, 4000);
-}
-
-// ---- Wire up on load --------------------------------------------------
+// ---- Wire everything up on load --------------------------------------
 window.onload = function () {
     gapiLoaded();
     gisLoaded();
 
     document.getElementById('sign-in-button').onclick = handleSignInClick;
     document.getElementById('sign-out-button').onclick = handleSignOutClick;
+    document.getElementById('addEventButton').onclick = openModal;
+    document.querySelector('.close-button').onclick = closeModal;
 
-    document.getElementById('parseButton').onclick = () => {
-        const text = document.getElementById('chunkInput').value;
-        const segments = splitIntoSegments(text);
-        if (!segments.length) {
-            showToast('Type something to parse first.', true);
-            return;
+    window.onclick = function (event) {
+        const modal = document.getElementById('eventModal');
+        if (event.target === modal) {
+            closeModal();
         }
-        drafts = segments.map(parseSegment);
-        renderDrafts();
     };
 
-    document.getElementById('clearButton').onclick = () => {
-        document.getElementById('chunkInput').value = '';
-        drafts = [];
-        renderDrafts();
+    document.getElementById('eventForm').onsubmit = function (e) {
+        e.preventDefault();
+        createEvent();
     };
-
-    document.getElementById('addAllButton').onclick = addAllDrafts;
 };
