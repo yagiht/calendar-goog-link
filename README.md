@@ -1,64 +1,61 @@
-# calendar-goog-link
+# ECHO Calendar
+**DISLAIMER: Google restricts apps that edit calendars to approved test users until the app passes its verification process. To try the live site, message me your Google email and I'll add you :) 
+There's also a GIF demo! **
 
-## Project Overview
-This project is a static HTML/CSS/JavaScript website designed for GitHub Pages that integrates directly with Google Calendar using the Google Calendar API. Sign-in uses **Google Identity Services (GIS)** — the current, supported OAuth library. (An earlier version of this project used `gapi.auth2`, which Google has deprecated; that's why sign-in never actually worked before.)
+Type our your plans, and ECHO puts them straight into your Google Calendar. It's a static website with no backend, so your calendar access never touches a server I run.
 
-## File Structure
+**Live site:** https://yagiht.github.io/echo-calendar/
+
+<!-- Add a screenshot or short GIF here, e.g. ![demo](docs/demo.gif) -->
+<img width="800" height="428" alt="ScreenRecording2026-09-30at7 21 54PM-ezgif com-video-to-gif-converter" src="https://github.com/user-attachments/assets/2423540d-e538-451a-8b2a-bcc4613c2d5c" />
+
+
+## What it does
+
+- **Free text in, calendar events out.** Write something like "dentist tomorrow at 3pm" and ECHO finds the date and time and creates the event.
+- **Recurring events.** Repeating plans are converted into standard Google Calendar recurrence rules (frequency, interval, and days of the week).
+- **Writes directly to your Google Calendar** after you sign in with Google.
+- **Command-room theme.** The interface is styled like a Star Wars(specically Clone Wars)-inspired command room.
+- **Voice feature.** Uses browsers Web Speech API, so users can speak into the textbox as well.
+
+## How it works
+
+| Piece | What it does |
+|---|---|
+| `index.html`, `style.css` | The page and its styling |
+| `script.js` | Sign-in, text parsing, recurrence rules, and calendar calls |
+
+- **Parsing:** dates and times are extracted from your text in the browser with [chrono-node](https://github.com/wanasit/chrono), with a forward-date bias so "Friday" means the next Friday.
+- **Recurrence:** parsed repeat patterns are turned into [RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545) `RRULE` strings (`FREQ`, `INTERVAL`, `BYDAY`), which is the format Google Calendar expects.
+- **Sign-in:** [Google Identity Services](https://developers.google.com/identity/gsi/web) (OAuth 2.0 token flow). The only permission requested is `calendar.events`, which lets the app create and edit events.
+- **No server:** everything runs client-side and is hosted on GitHub Pages, so no backend ever holds your credentials or your text.
+
+## Run it yourself
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Google Calendar API**.
+2. Create an **OAuth client ID** of type "Web application" and add your site's origin under **Authorized JavaScript origins** (for example `https://yourname.github.io`, plus `http://localhost:8000` for local testing). No redirect URI is needed.
+3. Put your client ID in the `CLIENT_ID` constant near the top of `script.js`.
+4. Serve the folder over http (OAuth doesn't work from `file://`):
+
 ```
-calendar-goog-link
-├── index.html
-├── style.css
-├── script.js
-└── README.md
-```
-
-## Setup Instructions
-
-### Enabling Google Calendar API
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project or select an existing project.
-3. Navigate to the "APIs & Services" > "Library" section.
-4. Search for "Google Calendar API" and enable it for your project.
-5. Go to "APIs & Services" > "Credentials".
-6. Click "Create Credentials" and select "OAuth client ID".
-7. Configure the OAuth consent screen if prompted (External is fine for personal use; add your own Google account as a test user if the app stays in "Testing" mode).
-8. Set the application type to "Web application".
-9. Add the following Authorized JavaScript origins:
-   - `https://yagiht.github.io`
-   - `http://localhost:PORT` (optional, for local testing — pick any port you serve the site on)
-10. You do **not** need to set an Authorized redirect URI — Google Identity Services' token flow used here doesn't redirect.
-11. After creating the credentials, copy the `Client ID` (looks like `xxxxx.apps.googleusercontent.com`).
-
-### Adding CLIENT_ID in script.js
-Open `script.js` and set the `CLIENT_ID` constant near the top:
-```javascript
-const CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
-```
-
-### Deployment on GitHub Pages
-1. Push your code to a GitHub repository named `calendar-goog-link`.
-2. Go to the repository's Settings > Pages.
-3. Select the branch to deploy (usually `main`).
-4. Save. Your site will be published at `https://yagiht.github.io/calendar-goog-link/`.
-5. Make sure that exact URL's origin (`https://yagiht.github.io`) is listed under Authorized JavaScript origins in step 9 above — a mismatch here is the most common reason sign-in fails.
-
-### Testing locally
-Because this uses OAuth, you can't just open `index.html` as a `file://` URL — serve it over http(s), e.g.:
-```bash
 python3 -m http.server 8000
 ```
-then visit `http://localhost:8000`, having added that origin to the OAuth client as described above.
 
-## Functionality
-- Users click "Sign in with Google" to authorize the app for calendar access (via Google Identity Services).
-- Once signed in, "Add To-Do to Calendar" opens a modal to enter a title, urgency, and date/time.
-- Submitting the form creates an event in the user's primary Google Calendar.
-- "Sign out" revokes the current session token.
+Then open `http://localhost:8000`. To deploy, push to GitHub and turn on Pages under **Settings, then Pages**.
 
 ## Troubleshooting
-- **Nothing happens when clicking "Add To-Do to Calendar"**: that button is disabled until you're signed in.
-- **Sign-in popup closes immediately / errors**: double-check the Authorized JavaScript origin exactly matches the page's origin (protocol + domain, no trailing path), and that the OAuth consent screen has your Google account added as a test user if it's still in "Testing" status.
-- **Console shows a 403 from the Calendar API**: the Google Calendar API likely isn't enabled on the Cloud project tied to your Client ID.
 
-## Acknowledgments
-This project utilizes the Google Calendar API and the gapi JavaScript client library, together with Google Identity Services for authentication.
+- **Sign-in popup closes or errors:** the Authorized JavaScript origin must match the page's origin exactly (protocol and domain, no path). If the OAuth consent screen is in "Testing" mode, your Google account must be listed as a test user.
+- **403 from the Calendar API:** the Google Calendar API isn't enabled on the project tied to your client ID.
+
+## Status and ideas
+
+**Working:** sign-in, free-text date and time parsing, recurring events, writing to Google Calendar.
+
+**Ideas:** editing or deleting events from the page, handling more kinds of phrasing, and showing a preview of the parsed event before it is created.
+
+## Built with
+
+JavaScript, Google Calendar API, Google Identity Services (OAuth 2.0), chrono-node, GitHub Pages.
+
+<!-- Optional: one honest line, e.g. "Built with AI assistance (Claude Code); I designed the features and tested them." -->
